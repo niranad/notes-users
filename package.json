@@ -1,0 +1,43 @@
+{
+  "name": "notes-users-auth-server",
+  "version": "1.0.0",
+  "description": "Notes users authentication microservice",
+  "main": "users-server.js",
+  "scripts": {
+    "test": "mocha",
+    "notes-users": "DEBUG=users:* PORT=3333 SEQUELIZE_CONNECT=sequelize-sqlite.yaml nodemon users-server"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niranad/notes-users.git"
+  },
+  "keywords": [
+    "Users",
+    "Authentication",
+    "Microservice"
+  ],
+  "author": "Adeniran John Olukanni",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/niranad/notes-users/issues"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "js-yaml": "^4.1.0",
+    "mongoose": "^6.7.0",
+    "restify": "^8.6.1",
+    "sequelize": "^6.25.3",
+    "mysql2": "^2.3.3",
+    "pg": "^8.8.0",
+    "pg-hstore": "^2.3.4"
+  },
+  "devDependencies": {
+    "chai": "^4.3.6",
+    "debug": "^4.3.4",
+    "mocha": "^10.1.0",
+    "nodemon": "^2.0.20",
+    "sqlite3": "^5.1.2",
+    "restify-clients": "^4.2.0"
+  }
+}
+
