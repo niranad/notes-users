@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "description": "Notes users authentication microservice",
   "main": "users-server.js",
+  "type": "module",
   "scripts": {
-    "test": "mocha",
-    "notes-users": "DEBUG=users:* PORT=3333 SEQUELIZE_CONNECT=sequelize-sqlite.yaml nodemon users-server"
+    "test": "PORT=3333 username=me password=w0rd19@6arnbc mocha",
+    "notes-dev": "DEBUG=users:* PORT=3333 SQLITE_FILE=sqlite3-users.db SEQUELIZE_CONNECT=sequelize-sqlite.yaml nodemon users-server",
+    "notes-prod-server": "PORT=3333 nodemon users-server"
   },
   "repository": {
     "type": "git",
@@ -23,21 +25,22 @@
   },
   "dependencies": {
     "bcrypt": "^5.1.0",
+    "dotenv": "^16.0.3",
     "js-yaml": "^4.1.0",
     "mongoose": "^6.7.0",
+    "mysql2": "^2.3.3",
+    "nodemailer": "^6.8.0",
+    "pg": "^8.8.0",
+    "pg-hstore": "^2.3.4",
     "restify": "^8.6.1",
     "sequelize": "^6.25.3",
-    "mysql2": "^2.3.3",
-    "pg": "^8.8.0",
-    "pg-hstore": "^2.3.4"
+    "sqlite3": "^5.1.2"
   },
   "devDependencies": {
     "chai": "^4.3.6",
     "debug": "^4.3.4",
     "mocha": "^10.1.0",
     "nodemon": "^2.0.20",
-    "sqlite3": "^5.1.2",
     "restify-clients": "^4.2.0"
   }
 }
-

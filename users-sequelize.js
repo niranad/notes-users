@@ -11,46 +11,44 @@ let SQUser;
 let sequlz;
 
 export const connectDB = () => {
-  return new Promise((resolve, reject) => {
-    if (SQUser) return resolve(SQUser.sync());
+  if (SQUser) return SQUser.sync();
 
-    return new Promise((res, rej) => {
-      readFile(process.env.SEQUELIZE_CONNECT, 'utf8', (err, data) => {
-        if (err) {
-          rej(err);
-        } else {
-          res(data);
-        }
-      })
-        .then(yamltext => {
-          return jsyaml.load(yamltext, 'utf8');
-        })
-        .then(params => {
-          if (!sequlz) {
-            sequlz = new Sequelize(
-              params.dbname,
-              params.username,
-              params.password,
-              params.params,
-            );
-          }
-          if (!SQUser) {
-            SQUser = sequlz.define('User', {
-              username: { type: Sequelize.STRING, unique: true },
-              password: Sequelize.STRING,
-              provider: Sequelize.STRING,
-              familyName: Sequelize.STRING,
-              givenName: Sequelize.STRING,
-              middleName: Sequelize.STRING,
-              emails: Sequelize.STRING(2048),
-              photos: Sequelize.STRING(2048),
-            });
-          }
-          return resolve(SQUser.sync());
-        })
-        .catch(err => reject(err));
+  return new Promise((resolve, reject) => {
+    readFile(process.env.SEQUELIZE_CONNECT, 'utf8', (err, data) => {
+      if (err) {
+        error(`Failed to read sequelize connect file: ${err}`);
+        reject(err);
+      } else {
+        resolve(data);
+      }
     });
-  });
+  })
+    .then((yamltext) => {
+      return jsyaml.load(yamltext, 'utf8');
+    })
+    .then((params) => {
+      if (!sequlz) {
+        sequlz = new Sequelize(
+          params.dbname,
+          params.username,
+          params.password,
+          params.params,
+        );
+      }
+      if (!SQUser) {
+        SQUser = sequlz.define('User', {
+          username: { type: Sequelize.STRING, unique: true },
+          password: Sequelize.STRING,
+          provider: Sequelize.STRING,
+          familyName: Sequelize.STRING,
+          givenName: Sequelize.STRING,
+          middleName: Sequelize.STRING,
+          emails: Sequelize.STRING(2048),
+          photos: Sequelize.STRING(2048),
+        });
+      }
+      return SQUser.sync();
+    });
 };
 
 export const create = (
@@ -63,8 +61,8 @@ export const create = (
   emails,
   photos,
 ) => {
-  return connectDB().then(SQUser => {
-    return hash(password, 12).then(hashPass => {
+  return connectDB().then(() => {
+    return hash(password, 12).then((hashPass) => {
       return SQUser.create({
         username,
         password: hashPass,
@@ -79,53 +77,39 @@ export const create = (
   });
 };
 
-export const update = (
-  username,
-  password,
-  provider,
-  familyName,
-  givenName,
-  middleName,
-  emails,
-  photos,
-) => {
-  return connectDB().then(SQUser => {
-    return find(username).then(user => {
-      return user
-        ? hash(password, 12).then(hashPass => {
-            return SQUser.update(
-              { where: { username } },
-              {
-                password: hashPass,
-                provider,
-                familyName,
-                givenName,
-                middleName,
-                emails: JSON.stringify(emails),
-                photos: JSON.stringify(photos),
-              },
-            );
+export const update = (username, obj) => {
+  return connectDB().then(() => {
+    return SQUser.findOne({ where: { username }}).then((user) => {
+      return user && obj.password
+        ? hash(obj.password, 12).then((hashPass) => {
+            return new Promise((resolve, reject) => {
+             user.update({ ...obj, password: hashPass })
+             user.save();
+             resolve(user);
+            })
           })
+        : user
+        ? SQUser.update( { ...obj }, { where: { username } })
         : undefined;
     });
   });
 };
 
-export const find = username => {
+export const find = (username) => {
   log('find ' + username);
   return connectDB()
-    .then(SQUser => {
-      return SQUser.find({ where: { username } });
+    .then(() => {
+      return SQUser.findOne({ where: { username } });
     })
-    .then(user => (user ? sanitizedUser(user) : undefined));
+    .then((user) => (user ? sanitizedUser(user) : undefined));
 };
 
-export const destroy = username => {
+export const destroy = (username) => {
   return connectDB()
-    .then(SQUser => {
-      return SQUser.find({ where: { username } });
+    .then(() => {
+      return SQUser.findOne({ where: { username } });
     })
-    .then(user => {
+    .then((user) => {
       if (!user)
         return error(
           `Did not find the requested user with username ${username}`,
@@ -136,32 +120,27 @@ export const destroy = username => {
 
 export const userPasswordCheck = (username, password) => {
   return connectDB()
-    .then(SQUser => {
-      return SQUser.find({ where: { username } });
+    .then(() => {
+      return SQUser.findOne({ where: { username } });
     })
-    .then(user => {
-      if (!user) {
+    .then((user) => {
+      if (!user || user.username !== username) {
         return {
           check: false,
           username,
-          message: 'No account with the provided username',
+          message: 'Username does not exist',
         };
-      } else if (user.username === username) {
-        return compare(password, user.password).then(valid => {
-          if (valid) {
-            return { check: true, username };
-          } else {
-            return { check: false, username, message: 'Invalid credentials' };
-          }
-        }) 
       } else {
-        return { check: false, username, message: 'Invalid credentials' };
-      }
+        return compare(password, user.password).then((valid) => {
+          if (valid) return { check: true, username };
+          return { check: false, username, message: 'Invalid credentials' };
+        });
+      } 
     });
 };
 
-export const findOrCreate = profile => {
-  return find(profile.id).then(user => {
+export const findOrCreate = (profile) => {
+  return find(profile.id).then((user) => {
     if (user) return user;
     return create(
       profile.id,
@@ -178,14 +157,14 @@ export const findOrCreate = profile => {
 
 export const listUsers = () => {
   return connectDB()
-    .then(SQUser => {
+    .then(() => {
       return SQUser.findAll({});
     })
-    .then(userslist => userslist.map(user => sanitizedUser(user)))
-    .catch(err => error(`listUsers; ${err}`));
+    .then((userslist) => userslist.map((user) => sanitizedUser(user)))
+    .catch((err) => error(`listUsers; ${err}`));
 };
 
-export const sanitizedUser = user => ({
+export const sanitizedUser = (user) => ({
   id: user.username,
   username: user.username,
   provider: user.provider,

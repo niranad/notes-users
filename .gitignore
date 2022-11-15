@@ -1,1 +1,9 @@
 node_modules
+
+# sequelize db connection files
+sequelize-*.yaml
+
+.env
+
+# test
+test/

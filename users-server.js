@@ -1,20 +1,63 @@
 import restify from 'restify';
-import * as UserModel from './users-sequelize.js';
+import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
 import debug from 'debug';
 import util from 'util';
 
+dotenv.config();
+
 const log = debug('users:server');
 const error = debug('users:error');
+
+let UserModel;
+const { DEBUG, PROJECT_EMAIL, BOT_EMAIL, EMAIL_HOST_PASS } = process.env;
+
+(async () => {
+  if (DEBUG) {
+    UserModel = await import('./users-sequelize.js');
+  } else {
+    UserModel = await import('./users-mongoose.js');
+  }
+})();
 
 const server = restify.createServer({
   name: 'User-Auth-Service',
   version: '0.0.1',
 });
 
-server.use(restify.authorizationParser());
+process.on('uncaughtException', (err) => {
+  if (DEBUG) return error('An unknown error has occurred.');
+
+  const transport = nodemailer.createTransport({
+    host: 'gmail',
+    requireTLS: true,
+    auth: {
+      user: BOT_EMAIL,
+      pass: EMAIL_HOST_PASS,
+    },
+    from: BOT_EMAIL,
+  });
+  transport.verify((err, success) => {
+    if (err) {
+      console.log(err);
+    }
+  });
+  const mailOptions = {
+    from: `Note-Users Microservice <${BOT_EMAIL}>`,
+    to: PROJECT_EMAIL,
+    subject: 'Unknown Error in Notes Users Authentication Microservice',
+    html: `<p>An unknown error has just occurred in the application.<p> <br/><br/><strong>Error info:<strong><br/><br/>${err}`,
+  };
+  transport.sendMail(mailOptions, (err, success) => {
+    if (err) console.log(err);
+    else console.log(success);
+  });
+});
+
+server.use(restify.plugins.authorizationParser());
 server.use(check);
-server.use(restify.queryParser());
-server.use(restify.bodyParser({ mapParams: true }));
+server.use(restify.plugins.queryParser());
+server.use(restify.plugins.bodyParser());
 
 // Create a user record
 server.post('/create-user', (req, res, next) => {
@@ -22,28 +65,28 @@ server.post('/create-user', (req, res, next) => {
     username,
     password,
     provider,
-    lastName,
+    familyName,
     givenName,
     middleName,
     emails,
     photos,
-  } = req.params;
+  } = req.body;
   UserModel.create(
     username,
     password,
     provider,
-    lastName,
+    familyName,
     givenName,
     middleName,
     emails,
     photos,
   )
-    .then(result => {
+    .then((result) => {
       log('created ' + util.inspect(result));
       res.send(result);
       next(false);
     })
-    .catch(err => {
+    .catch((err) => {
       res.send(500, err);
       error(err.stack);
       next(false);
@@ -52,32 +95,13 @@ server.post('/create-user', (req, res, next) => {
 
 // Update user record
 server.post('/update-user/:username', (req, res, next) => {
-  const {
-    username,
-    password,
-    provider,
-    lastName,
-    givenName,
-    middleName,
-    emails,
-    photos,
-  } = req.params;
-  UserModel.update(
-    username,
-    password,
-    provider,
-    lastName,
-    givenName,
-    middleName,
-    emails,
-    photos,
-  )
-    .then(result => {
+  UserModel.update(req.params.username, req.body)
+    .then((result) => {
       log('updated ' + util.inspect(result));
       res.send(result);
       next(false);
     })
-    .catch(err => {
+    .catch((err) => {
       res.send(500, err);
       error(err.stack);
       next(false);
@@ -90,7 +114,7 @@ server.post('/find-or-create', (req, res, next) => {
     username,
     password,
     provider,
-    lastName,
+    familyName,
     givenName,
     middleName,
     emails,
@@ -107,11 +131,11 @@ server.post('/find-or-create', (req, res, next) => {
     emails,
     photos,
   })
-    .then(result => {
+    .then((result) => {
       res.send(result);
       next(false);
     })
-    .catch(err => {
+    .catch((err) => {
       res.send(500, err);
       error(err.stack);
       next(false);
@@ -121,7 +145,7 @@ server.post('/find-or-create', (req, res, next) => {
 // Find the user data
 server.get('/find/:username', (req, res, next) => {
   UserModel.find(req.params.username)
-    .then(user => {
+    .then((user) => {
       if (!user) {
         res.send(500, new Error('Did not find ' + req.params.username));
       } else {
@@ -129,7 +153,7 @@ server.get('/find/:username', (req, res, next) => {
       }
       next(false);
     })
-    .catch(err => {
+    .catch((err) => {
       res.send(500, err);
       error(err.stack);
       next(false);
@@ -143,7 +167,7 @@ server.del('/destroy/:username', (req, res, next) => {
       res.send({});
       next(false);
     })
-    .catch(err => {
+    .catch((err) => {
       res.send(500, err);
       next(false);
     });
@@ -151,12 +175,13 @@ server.del('/destroy/:username', (req, res, next) => {
 
 // Check password
 server.post('/passwordCheck', (req, res, next) => {
-  UserModel.userPasswordCheck(req.params.username, req.params.password)
-    .then(check => {
+  console.log(req.body);
+  UserModel.userPasswordCheck(req.body.username, req.body.password)
+    .then((check) => {
       res.send(check);
       next(false);
     })
-    .catch(err => {
+    .catch((err) => {
       res.send(500, err);
       next(false);
     });
@@ -165,12 +190,12 @@ server.post('/passwordCheck', (req, res, next) => {
 // List users
 server.get('/list', (req, res, next) => {
   UserModel.listUsers()
-    .then(usersList => {
+    .then((usersList) => {
       if (!usersList) return [];
       res.send(usersList);
       next(false);
     })
-    .catch(err => {
+    .catch((err) => {
       res.send(500, err);
       error(err.stack);
       next(false);
@@ -184,29 +209,28 @@ server.listen(process.env.PORT, 'localhost', () => {
 // Mimic API key authentication
 let apiKeys = [
   {
-    user: 'test',
-    key: 'D4EG43C0-8BV6-4FE2-B358-7C0R230H11EF',
+    user: TEST_USER,
+    key: TEST_API_KEY,
+  },
+  {
+    user: NOTES_USER,
+    key: NOTES_API_KEY,
   },
 ];
 
 function check(req, res, next) {
   if (req.authorization) {
-    let found = false;
-    for (let auth of apikeys) {
+    for (let auth of apiKeys) {
       if (
-        auth.key === req.authorization.basic.password &&
-        auth.user === req.authorization.basic.username
+        auth.key === req.authorization?.basic?.password &&
+        auth.user === req.authorization?.basic?.username
       ) {
-        found = true;
-        break;
-      }
-      if (found) next();
-      else {
-        res.send(401, new Error('Not Authenticated'));
-        error(`Failed authentication check ` + util.inspect(req.authorization));
-        next(false);
+        return next();
       }
     }
+    res.send(401, new Error('Not Authenticated'));
+    error(`Failed authentication check ` + util.inspect(req.authorization));
+    next(false);
   } else {
     res.send(500, new Error('No Authorization Key'));
     error('NO AUTHORIZATION');
