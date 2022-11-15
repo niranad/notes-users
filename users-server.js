@@ -10,7 +10,7 @@ const log = debug('users:server');
 const error = debug('users:error');
 
 let UserModel;
-const { DEBUG, PROJECT_EMAIL, BOT_EMAIL, EMAIL_HOST_PASS } = process.env;
+const { DEBUG, PROJECT_EMAIL, BOT_EMAIL, EMAIL_HOST_PASS, TEST_USER, TEST_API_KEY, NOTES_USER, NOTES_API_KEY } = process.env;
 
 (async () => {
   if (DEBUG) {

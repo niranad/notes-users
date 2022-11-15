@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
-import { sanitizedUser } from './users-sequelize';
+import { sanitizedUser } from './users-sequelize.js';
 import dotenv from 'dotenv';
 import debug from 'debug';
 
