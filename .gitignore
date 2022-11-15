@@ -3,7 +3,7 @@ node_modules
 # sequelize db connection files
 sequelize-*.yaml
 
-.env
+#.env
 
 # test
 test/
