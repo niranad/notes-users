@@ -7,7 +7,7 @@
   "scripts": {
     "test": "PORT=3333 username=me password=w0rd19@6arnbc mocha",
     "notes-dev": "DEBUG=users:* PORT=3333 SQLITE_FILE=sqlite3-users.db SEQUELIZE_CONNECT=sequelize-sqlite.yaml nodemon users-server",
-    "notes-prod-server": "PORT=3333 nodemon users-server"
+    "start": "PORT=3333 node users-server"
   },
   "repository": {
     "type": "git",

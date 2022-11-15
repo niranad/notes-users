@@ -29,7 +29,7 @@ process.on('uncaughtException', (err) => {
   if (DEBUG) return error('An unknown error has occurred.');
 
   const transport = nodemailer.createTransport({
-    host: 'gmail',
+    service: 'gmail',
     requireTLS: true,
     auth: {
       user: BOT_EMAIL,
