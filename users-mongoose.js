@@ -9,7 +9,7 @@ dotenv.config();
 const log = debug('users:mongoose-model');
 const error = debug('users:error');
 
-const User = new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
   username: { type: String, trim: true, unique: true, required: true },
   password: { type: String, required: true },
   provider: { type: String, default: 'local' },
@@ -20,12 +20,12 @@ const User = new mongoose.Schema({
   photos: { type: [String], default: [] },
 });
 
-const UserModel = mongoose.model('User', User);
+export const User = mongoose.model('User', UserSchema);
 
 let db_conn;
 
 export const connectDB = () => {
-  if (db_conn) return;
+  if (db_conn) return Promise.resolve(db_conn);
   return mongoose.connect(
     process.env.MONGO_URI,
     { useNewUrlParser: true, useUnifiedTopology: true },
@@ -51,7 +51,7 @@ export const create = (userData) => {
       return bcrypt.hash(userData.password, 12);
     })
     .then((hashPass) => {
-      return UserModel.create(userData);
+      return User.create({userData, password: hashPass});
     })
     .then((doc) => {
       return doc ? doc : null;
@@ -63,13 +63,13 @@ export const update = (username, updateData) => {
     .then(() => {
       if (updateData.password)
         return bcrypt.hash(updateData.password).then((hashPass) => {
-          return UserModel.findOneAndUpdate(
+          return User.findOneAndUpdate(
             { username },
             { ...updateData, password: hashPass },
             { new: true },
           );
         });
-      return UserModel.findOneAndUpdate({ username }, updateData, {
+      return User.findOneAndUpdate({ username }, updateData, {
         new: true,
       });
     })
@@ -81,7 +81,7 @@ export const update = (username, updateData) => {
 export const find = (username) => {
   return connectDB()
     .then(() => {
-      return UserModel.findOne({ username });
+      return User.findOne({ username });
     })
     .then((doc) => {
       return doc ? sanitizedUser(doc) : null;
@@ -105,13 +105,13 @@ export const userPasswordCheck = (username, password) => {
 
 export const destroy = (username) => {
   return connectDB().then(() => {
-    return UserModel.deleteOne({ username });
+    return User.deleteOne({ username });
   });
 };
 
 export const findOrCreate = (profile) => {
   return connectDB().then(() => {
-    return UserModel.findOne({ username: profile.id }).then((user) => {
+    return User.findOne({ username: profile.id }).then((user) => {
       if (user) return user;
       return create({
         username: profile.id,
@@ -129,7 +129,7 @@ export const findOrCreate = (profile) => {
 export const listUsers = () => {
   return connectDB()
     .then(() => {
-      return UserModel.find({});
+      return User.find({});
     })
     .then((users) => users.map((user) => sanitizedUser(user)));
 };

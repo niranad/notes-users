@@ -1,4 +1,5 @@
-import restify from 'restify';
+import express from 'express';
+import expressAuthParser from 'express-auth-parser';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import debug from 'debug';
@@ -10,23 +11,22 @@ const log = debug('users:server');
 const error = debug('users:error');
 
 let UserModel;
-const { DEBUG, PROJECT_EMAIL, BOT_EMAIL, EMAIL_HOST_PASS, TEST_USER, TEST_API_KEY, NOTES_USER, NOTES_API_KEY } = process.env;
+const {
+  DEBUG,
+  PROJECT_EMAIL,
+  BOT_EMAIL,
+  EMAIL_HOST_PASS,
+  TEST_USER,
+  TEST_API_KEY,
+  NOTES_USER,
+  NOTES_API_KEY,
+} = process.env;
 
-(async () => {
-  if (DEBUG) {
-    UserModel = await import('./users-sequelize.js');
-  } else {
-    UserModel = await import('./users-mongoose.js');
-  }
-})();
-
-const server = restify.createServer({
-  name: 'User-Auth-Service',
-  version: '0.0.1',
-});
-
+// handle uncaught exception in application
 process.on('uncaughtException', (err) => {
   if (DEBUG) return error('An unknown error has occurred.');
+
+  if (process.env.NODE_ENV === 'test') return;
 
   const transport = nodemailer.createTransport({
     service: 'gmail',
@@ -39,7 +39,7 @@ process.on('uncaughtException', (err) => {
   });
   transport.verify((err, success) => {
     if (err) {
-      console.log(err);
+      error('Mail error: ', err);
     }
   });
   const mailOptions = {
@@ -49,158 +49,139 @@ process.on('uncaughtException', (err) => {
     html: `<p>An unknown error has just occurred in the application.<p> <br/><br/><strong>Error info:<strong><br/><br/>${err}`,
   };
   transport.sendMail(mailOptions, (err, success) => {
-    if (err) console.log(err);
-    else console.log(success);
+    if (err) error(err);
+    else log(success);
   });
 });
 
-server.use(restify.plugins.authorizationParser());
+// dynamically load User model base on environment
+async function loadUserModel() {
+  if (DEBUG) {
+    UserModel = await import('./users-sequelize.js');
+  } else {
+    UserModel = await import('./users-mongoose.js');
+  }
+}
+
+await loadUserModel();
+
+const server = express();
+
+server.use(expressAuthParser);
 server.use(check);
-server.use(restify.plugins.queryParser());
-server.use(restify.plugins.bodyParser());
+server.use(express.json());
+server.use(express.urlencoded({ extended: true }));
 
 // Create a user record
-server.post('/create-user', (req, res, next) => {
-  const {
-    username,
-    password,
-    provider,
-    familyName,
-    givenName,
-    middleName,
-    emails,
-    photos,
-  } = req.body;
-  UserModel.create(
-    username,
-    password,
-    provider,
-    familyName,
-    givenName,
-    middleName,
-    emails,
-    photos,
-  )
-    .then((result) => {
-      log('created ' + util.inspect(result));
-      res.send(result);
-      next(false);
-    })
-    .catch((err) => {
-      res.send(500, err);
-      error(err.stack);
-      next(false);
-    });
+server.post('/create-user', async (req, res, next) => {
+  try {
+    const result = await UserModel.create(req.body);
+    log('Created \n' + util.inspect(result));
+    res.status(201).json(result);
+  } catch (err) {
+    error('POST /create-user \n' + util.inspect(err));
+    next(err);
+  }
 });
 
 // Update user record
-server.post('/update-user/:username', (req, res, next) => {
-  UserModel.update(req.params.username, req.body)
-    .then((result) => {
-      log('updated ' + util.inspect(result));
-      res.send(result);
-      next(false);
-    })
-    .catch((err) => {
-      res.send(500, err);
-      error(err.stack);
-      next(false);
-    });
+server.post('/update-user/:username', async (req, res, next) => {
+  try {
+    const result = await UserModel.update(req.params.username, req.body);
+    log('Updated ' + util.inspect(result));
+    res.status(200).json(result);
+  } catch (err) {
+    error('POST /update-user/:username \n' + util.inspect(err));
+    next(err);
+  }
 });
 
 // Find a user, if not found create one given profile information
-server.post('/find-or-create', (req, res, next) => {
-  const {
-    username,
-    password,
-    provider,
-    familyName,
-    givenName,
-    middleName,
-    emails,
-    photos,
-  } = req.params;
-  UserModel.findOrCreate({
-    id: username,
-    username,
-    password,
-    provider,
-    familyName,
-    givenName,
-    middleName,
-    emails,
-    photos,
-  })
-    .then((result) => {
-      res.send(result);
-      next(false);
-    })
-    .catch((err) => {
-      res.send(500, err);
-      error(err.stack);
-      next(false);
+server.post('/find-or-create', async (req, res, next) => {
+  try {
+    const {
+      username,
+      password,
+      provider,
+      familyName,
+      givenName,
+      middleName,
+      emails,
+      photos,
+    } = req.params;
+    const result = await UserModel.findOrCreate({
+      id: username,
+      username,
+      password,
+      provider,
+      familyName,
+      givenName,
+      middleName,
+      emails,
+      photos,
     });
+    log('FindOrCreate \n' + util.inspect(result));
+    res.status(200).json(result);
+  } catch (err) {
+    error('POST /find-or-create \n' + util.inspect(err));
+    next(err);
+  }
 });
 
 // Find the user data
-server.get('/find/:username', (req, res, next) => {
-  UserModel.find(req.params.username)
-    .then((user) => {
-      if (!user) {
-        res.send(500, new Error('Did not find ' + req.params.username));
-      } else {
-        res.send(user);
-      }
-      next(false);
-    })
-    .catch((err) => {
-      res.send(500, err);
-      error(err.stack);
-      next(false);
-    });
+server.get('/find/:username', async (req, res, next) => {
+  try {
+    const user = await UserModel.find(req.params.username);
+    if (!user) {
+      res.status(404).json({ error: 'Did not find ' + req.params.username });
+    } else {
+      res.status(200).json(user);
+    }
+  } catch (err) {
+    error('GET /find/:username \n' + util.inspect(err));
+    next(err);
+  }
 });
 
 // Delete a user record
-server.del('/destroy/:username', (req, res, next) => {
-  UserModel.destroy(req.params.username)
-    .then(() => {
-      res.send({});
-      next(false);
-    })
-    .catch((err) => {
-      res.send(500, err);
-      next(false);
-    });
+server.delete('/destroy/:username', async (req, res, next) => {
+  try {
+    await UserModel.destroy(req.params.username);
+    res.status(200).json({ message: 'User deleted successfully' });
+  } catch (err) {
+    error('DELETE /destroy/:username ' + util.inspect(err));
+    next(err);
+  }
 });
 
 // Check password
-server.post('/passwordCheck', (req, res, next) => {
-  console.log(req.body);
-  UserModel.userPasswordCheck(req.body.username, req.body.password)
-    .then((check) => {
-      res.send(check);
-      next(false);
-    })
-    .catch((err) => {
-      res.send(500, err);
-      next(false);
-    });
+server.post('/passwordCheck', async (req, res, next) => {
+  try {
+    const check = await UserModel.userPasswordCheck(
+      req.body.username,
+      req.body.password,
+    );
+    res.status(200).json(check);
+  } catch (err) {
+    error('POST /passwordCheck \n' + util.inspect(err));
+    next(err);
+  }
 });
 
 // List users
-server.get('/list', (req, res, next) => {
-  UserModel.listUsers()
-    .then((usersList) => {
-      if (!usersList) return [];
-      res.send(usersList);
-      next(false);
-    })
-    .catch((err) => {
-      res.send(500, err);
-      error(err.stack);
-      next(false);
-    });
+server.get('/list', async (req, res, next) => {
+  try {
+    const usersList = await UserModel.listUsers();
+    log('UsersList ' + util.inspect(usersList));
+    if (!usersList) return res.status(200).json([]);
+    res.status(200).json(usersList);
+  } catch (err) {
+    error('GET /list \n' + util.inspect(err));
+    next(err);
+  }
 });
+
+export default server;
 
 server.listen(process.env.PORT, 'localhost', () => {
   log(`${server.name} listening at ${server.url}`);

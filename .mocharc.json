@@ -1,0 +1,7 @@
+{
+  "bail": false,
+  "timeout": 0,
+  "color": true,
+  "slow": "2000",
+  "exit": true
+}
