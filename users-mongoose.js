@@ -46,16 +46,19 @@ export const connectDB = () => {
 };
 
 export const create = (userData) => {
-  return connectDB()
-    .then(() => {
-      return bcrypt.hash(userData.password, 12);
-    })
-    .then((hashPass) => {
-      return User.create({userData, password: hashPass});
-    })
-    .then((doc) => {
-      return doc ? doc : null;
-    });
+  return new Promise((resolve, reject) => {
+    connectDB()
+      .then(() => {
+        return bcrypt.hash(userData.password, 12);
+      })
+      .then((hashPass) => {
+        return User.create({ userData, password: hashPass });
+      })
+      .then((doc) => {
+        resolve(doc ? doc : null);
+      })
+      .catch(err => reject(err));
+  }) 
 };
 
 export const update = (username, updateData) => {
@@ -133,3 +136,4 @@ export const listUsers = () => {
     })
     .then((users) => users.map((user) => sanitizedUser(user)));
 };
+
